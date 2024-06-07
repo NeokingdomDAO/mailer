@@ -7,15 +7,17 @@ import {
 import {
   handleApprovedResolutions,
   handleCreatedResolutions,
+  handleNewOffers,
   handleVotingStarts,
 } from "./controllers/mailer";
-import { fetchUsers } from "./backend";
+import { fetchOdooUsers } from "./odoo";
 
 async function handleEmails(event: ScheduledEvent) {
-  const ethToEmails: any = await fetchUsers(event);
+  const ethToEmails: any = await fetchOdooUsers(event);
 
-  await handleCreatedResolutions(event, ethToEmails);
+  await handleCreatedResolutions(event);
   await handleApprovedResolutions(event, ethToEmails);
+  await handleNewOffers(event, ethToEmails);
   await handleVotingStarts(event, ethToEmails);
 
   return new Response("OK");
@@ -23,15 +25,19 @@ async function handleEmails(event: ScheduledEvent) {
 
 async function handle(event: FetchEvent) {
   if (event.request.url.includes("/mails/created")) {
-    return await handleCreatedResolutions(event, await fetchUsers(event));
+    return await handleCreatedResolutions(event);
   }
 
   if (event.request.url.includes("/mails/approved")) {
-    return await handleApprovedResolutions(event, await fetchUsers(event));
+    return await handleApprovedResolutions(event, await fetchOdooUsers(event));
+  }
+
+  if (event.request.url.includes("/mails/offers")) {
+    return await handleNewOffers(event, await fetchOdooUsers(event));
   }
 
   if (event.request.url.includes("/mails/vote")) {
-    return await handleVotingStarts(event, await fetchUsers(event));
+    return await handleVotingStarts(event, await fetchOdooUsers(event));
   }
 
   if (event.request.url.includes("/health/email")) {

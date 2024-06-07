@@ -5,7 +5,7 @@ import {
   getFailedVotingStartEmailResolutions,
 } from "../email";
 import { getGraphErrorTimestamp } from "../graph";
-import { getBackendErrorTimestamp } from "../backend";
+import { getOdooErrorTimestamp } from "../odoo";
 
 export async function handleEmailHealth() {
   const notEmailedResolutionIds = (await getFailedPreDraftEmailResolution())
@@ -25,7 +25,7 @@ export async function handleEmailHealth() {
 }
 
 export async function handleOdooHealth() {
-  const graphVotersErrorTimestamp = await getBackendErrorTimestamp();
+  const graphVotersErrorTimestamp = await getOdooErrorTimestamp();
   if (graphVotersErrorTimestamp === null) {
     return new Response("OK");
   } else {
