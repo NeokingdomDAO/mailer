@@ -1,7 +1,6 @@
 import {
   sendPreDraftEmails,
   sendResolutionApprovedEmails,
-  sendNewOffersEmails,
   getFailedPreDraftEmailResolution,
   getFailedApprovedEmailResolutions,
   sendVotingStartsEmails,
@@ -11,19 +10,35 @@ import {
   fetchLastCreatedResolutions,
   fetchLastApprovedResolutionIds,
   fetchApprovedResolutions,
-  fetchVoters,
-  fetchNewOffers,
-  fetchContributors,
 } from "../graph";
 import { ResolutionData } from "../model";
 
 export async function handleCreatedResolutions(
-  event: FetchEvent | ScheduledEvent
+  event: FetchEvent | ScheduledEvent,
+  ethToEmails: Record<string, string>
 ) {
   const resolutions = await fetchLastCreatedResolutions(event);
 
   const previousFailedIds = await getFailedPreDraftEmailResolution();
-  await sendPreDraftEmails(resolutions.concat(previousFailedIds), event);
+
+  const resolutionReceiversMap: any = {};
+  await Promise.all(
+    resolutions
+      .concat(previousFailedIds)
+      .map(async (resolution: ResolutionData) => {
+        // For the demo, emails are sent only to the resolution creator
+        const receivers: Record<"address", string>[] = [
+          { address: resolution.createBy! },
+        ];
+        const emails = receivers
+          .map((receiver) => ethToEmails[receiver.address.toLowerCase()])
+          .filter((email) => email);
+
+        resolutionReceiversMap[resolution.id] = emails;
+      })
+  );
+
+  await sendPreDraftEmails(resolutionReceiversMap, event);
 
   return new Response("OK");
 }
@@ -36,6 +51,7 @@ export async function handleApprovedResolutions(
     (r) =>
       ({
         id: r.id,
+        createBy: r.createBy,
         votingStarts: (
           parseInt(r.approveTimestamp!) +
           parseInt(r.resolutionType!.noticePeriod)
@@ -44,12 +60,17 @@ export async function handleApprovedResolutions(
   );
   const previousFailedIds = await getFailedApprovedEmailResolutions();
   const totalResolutions = previousFailedIds.concat(newResolutions);
+
   if (totalResolutions.length > 0) {
     if (Object.keys(ethToEmails).length > 0) {
       const resolutionVotersMap: any = {};
       await Promise.all(
         totalResolutions.map(async (resolution: ResolutionData) => {
-          const voters = await fetchVoters(event, resolution.id);
+          // For the demo, emails are sent only to the resolution creator
+          //const voters = await fetchVoters(event, resolution.id);
+          const voters: Record<"address", string>[] = [
+            { address: resolution.createBy! },
+          ];
           const emails = voters
             .map((voter) => ethToEmails[voter.address.toLowerCase()])
             .filter((email) => email);
@@ -82,7 +103,7 @@ export async function handleVotingStarts(
 
   const LAST_VOTING_EMAIL_SENT_KEY = "lastVotingEmailSent";
   const lastVotingEmailSent = parseInt(
-    (await NEOKINGDOM_NAMESPACE.get(LAST_VOTING_EMAIL_SENT_KEY)) || "0"
+    (await SOLIDATO_NAMESPACE.get(LAST_VOTING_EMAIL_SENT_KEY)) || "0"
   );
 
   // Get those whose approved_timestamp + notice_period is less than today
@@ -113,7 +134,11 @@ export async function handleVotingStarts(
       const resolutionVotersMap: any = {};
       await Promise.all(
         totalResolutions.map(async (resolution: ResolutionData) => {
-          const voters = await fetchVoters(event, resolution.id);
+          // For the demo, emails are sent only to the resolution creator
+          //const voters = await fetchVoters(event, resolution.id);
+          const voters: Record<"address", string>[] = [
+            { address: resolution.createBy! },
+          ];
           const emails = voters
             .map((voter) => ethToEmails[voter.address.toLowerCase()])
             .filter((email) => email);
@@ -131,28 +156,11 @@ export async function handleVotingStarts(
   }
 
   event.waitUntil(
-    NEOKINGDOM_NAMESPACE.put(
+    SOLIDATO_NAMESPACE.put(
       LAST_VOTING_EMAIL_SENT_KEY,
       JSON.stringify(todaySeconds)
     )
   );
-
-  return new Response("OK");
-}
-
-export async function handleNewOffers(
-  event: FetchEvent | ScheduledEvent,
-  ethToEmails: any
-) {
-  const offers = await fetchNewOffers(event);
-  if (offers.length > 0) {
-    const contributors = await fetchContributors(event);
-    const emails = contributors
-      .map((contributor) => ethToEmails[contributor.address.toLowerCase()])
-      .filter((email) => email);
-
-    await sendNewOffersEmails(emails, event);
-  }
 
   return new Response("OK");
 }
